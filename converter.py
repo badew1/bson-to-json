@@ -12,9 +12,8 @@ def create_temp_directory():
     return temp_dir
 
 def ensure_db_content_directory(base_dir):
-    db_content_path = os.path.join(base_dir, 'db_content')
-    if not os.path.exists(db_content_path):
-        os.makedirs(db_content_path)
+    db_content_path = os.path.join(base_dir, 'db-content')
+    os.makedirs(db_content_path)
     return db_content_path
 
 def unzip_support_data(zip_file, extract_to):
@@ -34,21 +33,26 @@ def bson_to_json(bson_file):
     cmd = ['bsondump', bson_file]
     try:
         result = subprocess.run(cmd, stdout=subprocess.PIPE, check=True)
-        json_data = json.loads(result.stdout)
+        output_lines = result.stdout.decode('utf-8').splitlines()
+        for line in output_lines:
+            json_data.append(json.loads(line))
     except subprocess.CalledProcessError as e:
         print(f"Error converting {bson_file} to JSON: {e}")
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON: {e}")
     return json_data
 
 def combine_json_data(json_data_list, output_file):
-    combined_data = {}
+    combined_data = []
     for data in json_data_list:
         if isinstance(data, list):
-            for document in data:
-                if isinstance(document, dict):
-                    combined_data.update(document)
-
+            combined_data.extend(data)
+    
     with open(output_file, 'w') as f:
         json.dump(combined_data, f, indent=4)
+
+    print(f"Output JSON file saved to: {os.path.abspath(output_file)}")
+
 
 def main():
     parser = argparse.ArgumentParser(description='Convert BSON files to JSON.')
@@ -65,6 +69,8 @@ def main():
 
     try:
         unzip_support_data(support_data_zip, temp_dir)
+        
+        db_content_path = os.path.join(temp_dir, 'db-content')  
 
         bson_files = find_bson_files(db_content_path)
         if not bson_files:
