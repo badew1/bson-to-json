@@ -42,15 +42,9 @@ def bson_to_json(bson_file):
         print(f"Error decoding JSON: {e}")
     return json_data
 
-def combine_json_data(json_data_list, output_file):
-    combined_data = []
-    for data in json_data_list:
-        if isinstance(data, list):
-            combined_data.extend(data)
-    
+def combine_json_data(json_data_dict, output_file):
     with open(output_file, 'w') as f:
-        json.dump(combined_data, f, indent=4)
-
+        json.dump(json_data_dict, f, indent=4)
     print(f"Output JSON file saved to: {os.path.abspath(output_file)}")
 
 
@@ -77,17 +71,18 @@ def main():
             print("No BSON files found in the specified directory.")
             return
 
-        json_data_list = []
+        json_data_dict = {}
         for bson_file in bson_files:
+            file_name = os.path.basename(bson_file).replace('.bson', '')
             json_data = bson_to_json(bson_file)
             if json_data:
-                json_data_list.append(json_data)
+                json_data_dict[file_name] = json_data
 
-        if not json_data_list:
+        if not json_data_dict:
             print("No JSON data was generated.")
             return
 
-        combine_json_data(json_data_list, output_json)
+        combine_json_data(json_data_dict, output_json)
     finally:
         shutil.rmtree(temp_dir)
 
