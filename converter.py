@@ -4,6 +4,7 @@ import json
 import zipfile
 import shutil
 import argparse
+from datetime import datetime, timezone
 
 def create_temp_directory():
     temp_dir = 'temp_support_data'
@@ -42,11 +43,41 @@ def bson_to_json(bson_file):
         print(f"Error decoding JSON: {e}")
     return json_data
 
+def convert_bson_types(json_obj):
+    """ Recursively convert BSON types to plain JSON. Preserves $date object format."""
+    if isinstance(json_obj, list):
+        for i in range(len(json_obj)):
+            json_obj[i] = convert_bson_types(json_obj[i])
+    elif isinstance(json_obj, dict):
+        for key in list(json_obj):
+            if isinstance(json_obj[key], dict):
+                if '$numberDouble' in json_obj[key]:
+                    json_obj[key] = float(json_obj[key]['$numberDouble'])
+                elif '$numberInt' in json_obj[key]:
+                    json_obj[key] = int(json_obj[key]['$numberInt'])
+                elif '$numberLong' in json_obj[key]:
+                    json_obj[key] = int(json_obj[key]['$numberLong'])
+                elif '$date' in json_obj[key]:
+                    date_value = json_obj[key]['$date']
+                    if isinstance(date_value, dict) and '$numberLong' in date_value:
+                        millis = int(date_value['$numberLong'])
+                    else:
+                        millis = int(date_value)
+                    date = datetime.fromtimestamp(millis / 1000.0, tz=timezone.utc)
+                    json_obj[key] = {"$date": date.strftime("%Y-%m-%dT%H:%M:%S.%fZ")}
+                else:
+                    json_obj[key] = convert_bson_types(json_obj[key])
+            elif isinstance(json_obj[key], list):
+                json_obj[key] = convert_bson_types(json_obj[key])
+    return json_obj
+
 def combine_json_data(json_data_dict, output_file):
+    for key in json_data_dict:
+        json_data_dict[key] = convert_bson_types(json_data_dict[key])
+
     with open(output_file, 'w') as f:
         json.dump(json_data_dict, f, indent=4)
     print(f"Output JSON file saved to: {os.path.abspath(output_file)}")
-
 
 def main():
     parser = argparse.ArgumentParser(description='Convert BSON files to JSON.')
