@@ -44,10 +44,31 @@ def bson_to_json(bson_file):
     return json_data
 
 def convert_bson_types(json_obj):
-    """ Recursively convert BSON types to plain JSON. Preserves $date object format."""
+    """ Recursively convert special BSON types to plain JSON while handling deeply nested structures. """
     if isinstance(json_obj, list):
         for i in range(len(json_obj)):
-            json_obj[i] = convert_bson_types(json_obj[i])
+            element = json_obj[i]
+            if isinstance(element, dict):
+                if '$numberDouble' in element:
+                    json_obj[i] = float(element['$numberDouble'])
+                elif '$numberInt' in element:
+                    json_obj[i] = int(element['$numberInt'])
+                elif '$numberLong' in element:
+                    json_obj[i] = int(element['$numberLong'])
+                elif '$date' in element:
+                    date_value = element['$date']
+                    if isinstance(date_value, dict) and '$numberLong' in date_value:
+                        millis = int(date_value['$numberLong'])
+                    else:
+                        millis = int(date_value)
+                    date = datetime.fromtimestamp(millis / 1000.0, tz=timezone.utc)
+                    json_obj[i] = {"$date": date.strftime("%Y-%m-%dT%H:%M:%S.%fZ")[:-3] + "Z"}
+                else:
+                    # Recursively process nested dictionaries
+                    json_obj[i] = convert_bson_types(element)
+            elif isinstance(element, list):
+                # Recursively process nested lists
+                json_obj[i] = convert_bson_types(element)
     elif isinstance(json_obj, dict):
         for key in list(json_obj):
             if isinstance(json_obj[key], dict):
